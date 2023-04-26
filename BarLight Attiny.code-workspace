@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"name": "BarLight Attiny",
+			"path": "../../../Mat's Master Folder/1. Programming/PlatformIO/Projects/BarLight Attiny"
+		},
+		{
+			"name": "BarLight Attiny",
+			"path": "."
+		}
+	],
+	"settings": {
+		"cSpell.words": [
+			"EEPROM"
+		]
+	}
+}
