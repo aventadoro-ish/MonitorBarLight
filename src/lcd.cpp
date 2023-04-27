@@ -11,20 +11,20 @@ void lcd_send_byte(uint8_t value, boolean isData) {
   byte registerSelet = isData ? LCD_RS : 0;
   registerSelet |= 1 << 3; // backlight permanently enabled
   
-  TinyWireM.beginTransmission(LCD_I2C_ADDRESS);
+  I2C.beginTransmission(LCD_I2C_ADDRESS);
   // send upper nibble first
-  TinyWireM.write(upperNibble | registerSelet);          // setup data
-  TinyWireM.write(upperNibble | registerSelet | LCD_EN); // toggle EN line
-  TinyWireM.write(upperNibble | registerSelet);          // 
+  I2C.write(upperNibble | registerSelet);          // setup data
+  I2C.write(upperNibble | registerSelet | LCD_EN); // toggle EN line
+  I2C.write(upperNibble | registerSelet);          // 
   
   delay(1);
   
   // then send lower nibble
-  TinyWireM.write(lowerNibble | registerSelet);          // setup data
-  TinyWireM.write(lowerNibble | registerSelet | LCD_EN); // toggle EN line
-  TinyWireM.write(lowerNibble | registerSelet);
+  I2C.write(lowerNibble | registerSelet);          // setup data
+  I2C.write(lowerNibble | registerSelet | LCD_EN); // toggle EN line
+  I2C.write(lowerNibble | registerSelet);
   
-  TinyWireM.endTransmission();
+  I2C.endTransmission();
 }
 
 void lcd_init() {

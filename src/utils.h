@@ -5,7 +5,47 @@
 #include <stdint.h>
 // I2C TinyWire
 #include "Arduino.h"
-#include "TinyWireM.h"                  // I2C Master lib for ATTinys which use USI
+
+
+
+// #ifdef __AVR_ATtiny85__
+// // Code for ATtiny85
+//         #include "TinyWireM.h"                  // I2C Master lib for ATTinys which use USI
+//         #define I2C TinyWireM
+// #endif
+
+
+// #ifndef __AVR_ATmega328P__
+//         #include "Wire.h"
+//         #define I2C Wire
+// #endif
+
+
+
+#if defined (__AVR_ATtiny85__)
+// Code for ATtiny85
+        #include "TinyWireM.h"                  // I2C Master lib for ATTinys which use USI
+        #define I2C TinyWireM
+
+#elif defined (__AVR_ATmega328P__) // false //defined(ARDUINO_AVR_NANO)       
+        #define BOARD "Nano"
+
+        #define SDA 18
+        #define SCL 19
+
+        #include "Wire.h"
+        #define I2C Wire
+        // #error Wrong chip, it must be a ATtiny85 or ATmega328P
+
+// #else
+// #error "Unknown board"
+
+#endif
+
+// #if !defined (__AVR_ATtiny85__) && !defined (__AVR_ATmega328P__)
+//   #error Wrong chip, it must be a ATtiny85 or ATmega328P
+// #endif
+
 
 
 /* ==========================================================

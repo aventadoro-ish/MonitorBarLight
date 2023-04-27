@@ -13,8 +13,8 @@
 
 #include <EncButton2.h>
 
-#include "lcd.h"
 #include "utils.h"
+#include "lcd.h"
 // send(byte) == write(byte) (but write returns status code)
 
 // Опциональные дефайн-настройки (показаны по умолчанию)
@@ -67,8 +67,8 @@ void setup() {
     pinMode(BUTTON_PIN, INPUT_PULLUP);
     pinMode(PWM_PIN_0, OUTPUT);
     pinMode(PWM_PIN_1, OUTPUT);
-
-    TinyWireM.begin();  // initialize I2C lib
+    
+    I2C.begin();  // initialize I2C lib
 
     lcd_init();
     lcd_print_screen("hello there!");
