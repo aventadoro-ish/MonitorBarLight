@@ -1,21 +1,11 @@
 /*
- * Test program for Adafruit Trinket ATtiny85 EVB
- * Use of I2C to communicate with VEML7700 light sensor
- *
- * Main source of info: https://learn.adafruit.com/adafruit-veml7700/arduino
- *
- * ---
- *
- * Additional resource on Trinket I2C lib: https://github.com/adafruit/TinyWireM
- * - On the Trinket boards, pin #0 is SDA (I2C data), pin #2 is SCK (I2C clock).
- *
+ * Firmware for my monitor bar light
  */
 
 #include <EncButton2.h>
 
 #include "utils.h"
 #include "lcd.h"
-// send(byte) == write(byte) (but write returns status code)
 
 // Опциональные дефайн-настройки (показаны по умолчанию)
 #define EB_DEB 50     // дебаунс кнопки, мс
@@ -64,14 +54,23 @@ void blink_forever(uint8_t pin, uint32_t period_ms) {
 
 // ==== setup() ====================================================
 void setup() {
+
+    #ifdef DEBUG
+        Serial.begin(9600);
+    #endif
+
     pinMode(BUTTON_PIN, INPUT_PULLUP);
     pinMode(PWM_PIN_0, OUTPUT);
     pinMode(PWM_PIN_1, OUTPUT);
+
+    // blink(PWM_PIN_0, 10, 200);
+    // blink(PWM_PIN_1, 10, 200);
     
+
     I2C.begin();  // initialize I2C lib
 
-    lcd_init();
-    lcd_print_screen("hello there!");
+    DPRINTLN("Hello there!");
+
 }
 
 static MenuState menu_state = MENU_WAIT_FOR_INPUT;
@@ -96,16 +95,16 @@ void loop() {
         (uint32_t)(millis() - menu_timeout_start) > MENU_TIMEOUT_MS &&
         menu_state != MENU_WAIT_FOR_INPUT) {
         
-        lcd_print_screen("NO menu");
+        DPRINTLN("NO menu");
         menu_state = MENU_WAIT_FOR_INPUT;
         // menu_timeout_start = millis();
     }
 
     if (menu_state == MENU_WAIT_FOR_INPUT && btn.press()) {
+        
+        DPRINTLN("MENU_CHANNEL_SELECT");
         // if (menu_state == MENU_WAIT_FOR_INPUT && btn.click()) {
 
-        // lcd_cursor_home();
-        // lcd_print_screen("CHANNEL_SELECT");
         menu_state = MENU_CHANNEL_SELECT;
         menu_timeout_start = millis();
     }
@@ -115,14 +114,15 @@ void loop() {
 
         pwm_channel_select = (pwm_channel_select + 1) % n_pwm_channels;
 
-        sprintf(debug_str, "pwm idx = %u", pwm_channel_select);
-        lcd_cursor_home();
-        lcd_print_screen(debug_str);
+        sprintf(debug_str, "pwm idx = %u", pwm_channel_select);        
+        DPRINTLN(debug_str);
+        
         menu_timeout_start = millis();
     }
 
     if (menu_state == MENU_CHANNEL_SELECT && btn.hold()) {
         menu_state = MENU_VALUE_SELECT;
+        DPRINTLN("MENU_VALUE_SELECT");
     }
 
     if (menu_state == MENU_VALUE_SELECT && btn.hold()) {
@@ -140,8 +140,7 @@ void loop() {
 
         sprintf(debug_str, "val[%u] = %lu", pwm_channel_select,
                 pwm_values[pwm_channel_select]);
-        lcd_cursor_home();
-        lcd_print_screen(debug_str);
+        DPRINTLN(debug_str);
 
         analogWrite(pwm_pins[pwm_channel_select],
                     pwm_values[pwm_channel_select]);
@@ -151,8 +150,7 @@ void loop() {
 
     if (menu_state == MENU_CHANNEL_SELECT && btn.hasClicks(2)) {
         menu_state = MENU_MODE_SELECT;
-        lcd_cursor_home();
-        lcd_print_screen("MODE SELECT");
+        DPRINTLN("MODE SELECT");
     }
 
     if (menu_state == MENU_MODE_SELECT && btn.click()) {
@@ -160,8 +158,8 @@ void loop() {
             (pwm_modes[pwm_channel_select] + 1) % n_pwm_modes;
         sprintf(debug_str, "mode[%u] = %d", pwm_channel_select,
                 pwm_modes[pwm_channel_select]);
-        lcd_cursor_home();
-        lcd_print_screen(debug_str);
+        DPRINTLN(debug_str);
+        
         menu_timeout_start = millis();
     }
 
