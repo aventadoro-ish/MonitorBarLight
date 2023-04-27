@@ -55,7 +55,7 @@ void blink_forever(uint8_t pin, uint32_t period_ms) {
 // ==== setup() ====================================================
 void setup() {
 
-    #ifdef DEBUG
+    #ifdef DEBUG_VERSION
         Serial.begin(9600);
     #endif
 
