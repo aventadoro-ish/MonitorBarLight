@@ -73,6 +73,9 @@ void setup() {
 
 }
 
+
+
+// ==== loop() =====================================================
 static MenuState menu_state = MENU_WAIT_FOR_INPUT;
 
 // TODO: init from EEPROM
@@ -82,7 +85,6 @@ static uint8_t pwm_channel_select = 0;
 
 static uint32_t menu_timeout_start = 0;
 
-// ==== loop() =====================================================
 void loop() {
 
     // static uint32_t menu_increase_delay = 0;
@@ -159,7 +161,7 @@ void loop() {
         sprintf(debug_str, "mode[%u] = %d", pwm_channel_select,
                 pwm_modes[pwm_channel_select]);
         DPRINTLN(debug_str);
-        
+
         menu_timeout_start = millis();
     }
 

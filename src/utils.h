@@ -5,14 +5,14 @@
 #include <stdint.h>
 #include "Arduino.h"
 
-#ifdef DEBUG_VERSION
-        #define DEBUG true
-#else
-        #define DEBUG false
-#endif
+// #ifdef DEBUG_VERSION
+//         #define DEBUG true
+// #else
+//         #define DEBUG false
+// #endif
 
 // https://forum.arduino.cc/t/how-to-debug-code-in-arduino-ide/209670/9
-#ifdef DEBUG    //Macros are usually in all capital letters.
+#ifdef DEBUG_VERSION    //Macros are usually in all capital letters.
    #define DPRINT(...)    Serial.print(__VA_ARGS__)     //DPRINT is a macro, debug print
    #define DPRINTLN(...)  Serial.println(__VA_ARGS__)   //DPRINTLN is a macro, debug print with new line
 #else
