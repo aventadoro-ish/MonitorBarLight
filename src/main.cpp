@@ -35,6 +35,33 @@ enum MenuState {
     MENU_MODE_SELECT,
 };
 
+enum PWMModes {
+    CONSTANT,
+    FADE_ABS,
+    FADE_REL,
+    FIRE
+};
+
+typedef struct PWM_Channel_Settings_s {
+    uint8_t pwm_pin;
+    uint8_t pwm_user_value;
+    uint8_t pwm_value;
+    PWMModes pwm_mode;
+    uint32_t last_update_time;
+    bool is_fade_asc;
+    bool is_selected;
+} PWM_Channel_Settings_t;
+
+bool operator==(const PWM_Channel_Settings_s& lhs, const PWM_Channel_Settings_s& rhs) {
+    bool eq_value = lhs.pwm_value == rhs.pwm_value;
+    bool eq_mode  = lhs.pwm_mode == rhs.pwm_mode;
+    bool eq_sel = lhs.is_selected == rhs.is_selected; 
+    bool eq_pin = lhs.pwm_pin == rhs.pwm_pin; 
+
+    return eq_value && eq_mode && eq_sel && eq_pin;
+}
+
+
 EncButton2<EB_BTN> btn(INPUT_PULLUP, BUTTON_PIN);
 
 // ==== functions ==================================================
@@ -52,6 +79,54 @@ void blink_forever(uint8_t pin, uint32_t period_ms) {
     }
 }
 
+uint8_t correctGamma(uint8_t value) {
+    return pgm_read_byte(&gamma8[value]);
+}
+
+void handle_pwm_channel(PWM_Channel_Settings_t *s) {
+    if (s->is_selected) {
+        if ((uint32_t)(millis() - s->last_update_time) > PWM_SELECTED_BLINK_T_MS) {
+            
+            s->pwm_value = s->pwm_value > PWM_BLINK_MIN ? PWM_BLINK_MIN : PWM_BLINK_MAX;
+            analogWrite(s->pwm_pin, correctGamma(s->pwm_value));
+            
+            s->last_update_time = millis();
+
+            
+        }
+        return;
+    }
+
+    // constant mode
+    if (s->pwm_mode == CONSTANT) {
+        analogWrite(s->pwm_pin, correctGamma(s->pwm_user_value));
+        return;
+    }
+
+    // fade abs mode
+    if (s->pwm_mode == FADE_ABS) {
+        if ((uint32_t)(millis() - s->last_update_time) > PWM_FADE_STEP_PERIOD_MS) {
+            incDecValue(s->pwm_value, s->is_fade_asc, 1, PWM_MAX_VALUE, PWM_MIN_VALUE);
+            analogWrite(s->pwm_pin, correctGamma(s->pwm_value));
+            s->last_update_time = millis();
+        }
+        return;
+    }
+
+    // fade rel mode
+    if (s->pwm_mode == FADE_REL) {
+        if ((uint32_t)(millis() - s->last_update_time) > PWM_FADE_STEP_PERIOD_MS) {
+            incDecValue(s->pwm_value, s->is_fade_asc, 1, s->pwm_user_value, PWM_MIN_VALUE);
+            analogWrite(s->pwm_pin, correctGamma(s->pwm_value));
+            s->last_update_time = millis();
+        }
+        return;
+    }
+
+
+}
+
+
 // ==== setup() ====================================================
 void setup() {
 
@@ -63,39 +138,43 @@ void setup() {
     pinMode(PWM_PIN_0, OUTPUT);
     pinMode(PWM_PIN_1, OUTPUT);
 
-    // blink(PWM_PIN_0, 10, 200);
-    // blink(PWM_PIN_1, 10, 200);
-    
-
     I2C.begin();  // initialize I2C lib
 
-    DPRINTLN("Hello there!");
+    DPRINTLN("Monitor Bar Light v1");
 
 }
 
 
-
 // ==== loop() =====================================================
-static MenuState menu_state = MENU_WAIT_FOR_INPUT;
-
-// TODO: init from EEPROM
-static uint32_t pwm_values[n_pwm_channels] = {0, 0};
-static uint8_t pwm_modes[n_pwm_channels] = {0, 0};
-static uint8_t pwm_channel_select = 0;
-
-static uint32_t menu_timeout_start = 0;
-
 void loop() {
+    static MenuState menu_state = MENU_WAIT_FOR_INPUT;
+    
+    // TODO: init from EEPROM
+    static PWM_Channel_Settings_t pwm_channels[] = {
+        //          user_value      last_upd_time
+        //          |  value        |         is_fade_asc  
+        // pin      |  |  mode      |         |     is_selected
+        {PWM_PIN_0, 0, 0, CONSTANT, millis(), true, false},
+        {PWM_PIN_1, 0, 0, CONSTANT, millis(), true, false}
+    };
+    static uint8_t pwm_channel_select = 0;
 
-    // static uint32_t menu_increase_delay = 0;
+    static uint32_t menu_timeout_start = 0;
+    static uint32_t menu_some_time = 0;
     
 
     btn.tick();
     char debug_str[100];
 
+    handle_pwm_channel(&pwm_channels[0]);
+    handle_pwm_channel(&pwm_channels[1]);
+    
+
     if (btn.state() == 0 &&
         (uint32_t)(millis() - menu_timeout_start) > MENU_TIMEOUT_MS &&
         menu_state != MENU_WAIT_FOR_INPUT) {
+
+        pwm_channels[pwm_channel_select].is_selected = false;
         
         DPRINTLN("NO menu");
         menu_state = MENU_WAIT_FOR_INPUT;
@@ -103,7 +182,6 @@ void loop() {
     }
 
     if (menu_state == MENU_WAIT_FOR_INPUT && btn.press()) {
-        
         DPRINTLN("MENU_CHANNEL_SELECT");
         // if (menu_state == MENU_WAIT_FOR_INPUT && btn.click()) {
 
@@ -113,8 +191,9 @@ void loop() {
 
     // if (menu_state == MENU_CHANNEL_SELECT && btn.click()) {
     if (menu_state == MENU_CHANNEL_SELECT && btn.hasClicks(1)) {
-
+        pwm_channels[pwm_channel_select].is_selected = false;
         pwm_channel_select = (pwm_channel_select + 1) % n_pwm_channels;
+        pwm_channels[pwm_channel_select].is_selected = true;
 
         sprintf(debug_str, "pwm idx = %u", pwm_channel_select);        
         DPRINTLN(debug_str);
@@ -123,43 +202,42 @@ void loop() {
     }
 
     if (menu_state == MENU_CHANNEL_SELECT && btn.hold()) {
+        pwm_channels[pwm_channel_select].is_selected = false;
         menu_state = MENU_VALUE_SELECT;
         DPRINTLN("MENU_VALUE_SELECT");
     }
 
     if (menu_state == MENU_VALUE_SELECT && btn.hold()) {
-        static bool isIncreasing = true;
-        if (isIncreasing) {
-            if (++pwm_values[pwm_channel_select] == PWM_MAX_VALUE) {
-                isIncreasing = false;
-            }
-        } else {
-            if (--pwm_values[pwm_channel_select] == PWM_MIN_VALUE) {
-                isIncreasing = true;
-            }
+        if ((uint32_t)(millis() - pwm_channels[pwm_channel_select].last_update_time) > 10) {
+            static bool isIncreasing = true;
+            incDecValue((pwm_channels[pwm_channel_select].pwm_user_value),
+                        isIncreasing, 1, PWM_MAX_VALUE, PWM_MIN_VALUE);
+            
+            sprintf(debug_str, "val[%u] = %u", pwm_channel_select,
+                    pwm_channels[pwm_channel_select].pwm_user_value);
+            DPRINTLN(debug_str);
+            pwm_channels[pwm_channel_select].last_update_time = millis();
         }
-        
 
-        sprintf(debug_str, "val[%u] = %lu", pwm_channel_select,
-                pwm_values[pwm_channel_select]);
-        DPRINTLN(debug_str);
-
-        analogWrite(pwm_pins[pwm_channel_select],
-                    pwm_values[pwm_channel_select]);
-        delay(5);
         menu_timeout_start = millis();
     }
 
+    if (menu_state == MENU_VALUE_SELECT && btn.hasClicks(1)) {
+        DPRINTLN("NO menu");
+        menu_state = MENU_WAIT_FOR_INPUT;
+    }
+
     if (menu_state == MENU_CHANNEL_SELECT && btn.hasClicks(2)) {
+        pwm_channels[pwm_channel_select].is_selected = false;
         menu_state = MENU_MODE_SELECT;
         DPRINTLN("MODE SELECT");
     }
 
     if (menu_state == MENU_MODE_SELECT && btn.click()) {
-        pwm_modes[pwm_channel_select] =
-            (pwm_modes[pwm_channel_select] + 1) % n_pwm_modes;
+        pwm_channels[pwm_channel_select].pwm_mode =
+            (pwm_channels[pwm_channel_select].pwm_mode + 1) % n_pwm_modes;
         sprintf(debug_str, "mode[%u] = %d", pwm_channel_select,
-                pwm_modes[pwm_channel_select]);
+                pwm_channels[pwm_channel_select].pwm_mode);
         DPRINTLN(debug_str);
 
         menu_timeout_start = millis();
