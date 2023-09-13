@@ -11,6 +11,72 @@
 #define EB_DEB 50     // дебаунс кнопки, мс
 #define EB_CLICK 100  // таймаут накликивания, мс
 
+
+#if defined(__AVR_ATtiny85__)
+// Code for ATtiny85 Trinket 5V board
+
+volatile int Dac[2];
+volatile uint8_t* Port[] = { &OCR1A, &OCR1B };
+volatile int Cycle = 0;
+
+// The following function was taken from: http://www.technoblogy.com/show?1NGL
+// Overflow interrupt
+ISR (TIMER1_OVF_vect) {
+  static int rem[2];
+  for (int chan=0; chan<2; chan++) {
+    int remain;
+    if (Cycle == 0)  {
+        remain = Dac[chan];
+    } else {
+        remain = rem[chan];
+    } 
+    
+    if (remain >= 256) {
+        *Port[chan] = 255; 
+        remain = remain - 256;
+    } else {
+         *Port[chan] = remain;
+         remain = 0;
+    }
+    rem[chan] = remain;
+  }
+
+  Cycle = (Cycle + 1) & 0x0F;
+}
+
+// The following function was taken from: http://www.technoblogy.com/show?1NGL
+void analogWriteATtiny (int chan, int value) {
+  cli(); Dac[chan] = value; sei();
+}
+
+
+// The following function was taken from: http://www.technoblogy.com/show?1NGL
+// Timer/Counter1 doing PWM on OC1A (PB1) and OC1B (PB4)    
+#define pwmInit() {                                             \
+    TCCR1 = 1<<PWM1A | 1<<COM1A0 | 1<<CS10;                     \    
+    GTCCR = 1<<PWM1B | 1<<COM1B0;                               \
+    TIMSK = TIMSK | 1<<TOIE1;                                   \
+    pinMode(4, OUTPUT);                                         \
+    pinMode(1, OUTPUT);                                         \
+}
+
+#define pwmSetValue(channel, value) \
+        analogWriteATtiny(channel, (uint16_t)value)
+
+#else
+// Code for other Arduino platforms
+
+#define pwmInit() {                                             \
+    pinMode(PWM_PIN_0, OUTPUT);                                 \
+    pinMode(PWM_PIN_1, OUTPUT);                                 \
+}
+
+#define pwmSetValue(channel, value) \
+        analogWrite(channel, (uint8_t)value)
+
+#endif
+
+
 const uint8_t pwm_pins[] = {PWM_PIN_0, PWM_PIN_1};
 const uint8_t n_pwm_channels = sizeof(pwm_pins) / sizeof(uint8_t);
 const uint8_t n_pwm_modes = 4;  // TODO: change to enum PWMModes
@@ -44,8 +110,8 @@ enum PWMModes {
 
 typedef struct PWM_Channel_Settings_s {
     uint8_t pwm_pin;
-    uint8_t pwm_user_value;
-    uint8_t pwm_value;
+    uint16_t pwm_user_value;
+    uint16_t pwm_value;
     PWMModes pwm_mode;
     uint32_t last_update_time;
     bool is_fade_asc;
@@ -79,16 +145,26 @@ void blink_forever(uint8_t pin, uint32_t period_ms) {
     }
 }
 
-uint8_t correctGamma(uint8_t value) {
-    return pgm_read_byte(&gamma8[value]);
+#if defined(__AVR_ATtiny85__)
+// Code for ATtiny85 Trinket 5V board
+uint16_t correctGamma(uint8_t value) {
+    return pgm_read_byte(&gamma[value]);
 }
+
+#else
+// Code for other Arduino platforms
+uint8_t correctGamma(uint8_t value) {
+    return pgm_read_byte(&gamma[value]);
+}
+
+#endif
 
 void handle_pwm_channel(PWM_Channel_Settings_t *s) {
     if (s->is_selected) {
         if ((uint32_t)(millis() - s->last_update_time) > PWM_SELECTED_BLINK_T_MS) {
             
             s->pwm_value = s->pwm_value > PWM_BLINK_MIN ? PWM_BLINK_MIN : PWM_BLINK_MAX;
-            analogWrite(s->pwm_pin, correctGamma(s->pwm_value));
+            pwmSetValue(s->pwm_pin, correctGamma(s->pwm_value));
             
             s->last_update_time = millis();
 
@@ -99,7 +175,7 @@ void handle_pwm_channel(PWM_Channel_Settings_t *s) {
 
     // constant mode
     if (s->pwm_mode == CONSTANT) {
-        analogWrite(s->pwm_pin, correctGamma(s->pwm_user_value));
+        pwmSetValue(s->pwm_pin, correctGamma(s->pwm_user_value));
         return;
     }
 
@@ -107,7 +183,7 @@ void handle_pwm_channel(PWM_Channel_Settings_t *s) {
     if (s->pwm_mode == FADE_ABS) {
         if ((uint32_t)(millis() - s->last_update_time) > PWM_FADE_STEP_PERIOD_MS) {
             incDecValue(s->pwm_value, s->is_fade_asc, 1, PWM_MAX_VALUE, PWM_MIN_VALUE);
-            analogWrite(s->pwm_pin, correctGamma(s->pwm_value));
+            pwmSetValue(s->pwm_pin, correctGamma(s->pwm_value));
             s->last_update_time = millis();
         }
         return;
@@ -117,7 +193,7 @@ void handle_pwm_channel(PWM_Channel_Settings_t *s) {
     if (s->pwm_mode == FADE_REL) {
         if ((uint32_t)(millis() - s->last_update_time) > PWM_FADE_STEP_PERIOD_MS) {
             incDecValue(s->pwm_value, s->is_fade_asc, 1, s->pwm_user_value, PWM_MIN_VALUE);
-            analogWrite(s->pwm_pin, correctGamma(s->pwm_value));
+            pwmSetValue(s->pwm_pin, correctGamma(s->pwm_value));
             s->last_update_time = millis();
         }
         return;
@@ -134,10 +210,9 @@ void setup() {
         Serial.begin(9600);
     #endif
 
+    pwmInit();
     pinMode(BUTTON_PIN, INPUT_PULLUP);
-    pinMode(PWM_PIN_0, OUTPUT);
-    pinMode(PWM_PIN_1, OUTPUT);
-
+    
     I2C.begin();  // initialize I2C lib
 
     DPRINTLN("Monitor Bar Light v1");
@@ -234,7 +309,7 @@ void loop() {
     }
 
     if (menu_state == MENU_MODE_SELECT && btn.click()) {
-        pwm_channels[pwm_channel_select].pwm_mode =
+        pwm_channels[pwm_channel_select].pwm_mode = 
             (pwm_channels[pwm_channel_select].pwm_mode + 1) % n_pwm_modes;
         sprintf(debug_str, "mode[%u] = %d", pwm_channel_select,
                 pwm_channels[pwm_channel_select].pwm_mode);
